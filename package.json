@@ -1,0 +1,19 @@
+{
+  "name": "atalaya-gpt",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "log4js": "^6.9.1",
+    "mustache": "^4.2.0",
+    "openai": "^4.20.0",
+    "puppeteer": "^21.5.2"
+  }
+}
