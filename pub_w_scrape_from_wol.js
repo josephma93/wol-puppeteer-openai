@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 
 async function extractArticleContents(page) {
     await page.waitForSelector(`#article`);
-    // Define and inject the global method
+    // Define and inject the global methods
     await page.evaluate(
         (
             cleanTextFnDef,
