@@ -236,50 +236,94 @@ export function extractTextFromElements(selector, context) {
     return context.$$eval(selector, (els) => els.map(getTrimmedText));
 }
 
-async function hoverAndGetTooltipText($cite, page) {
-    await $cite.hover();
-    await page.waitForSelector('.tooltipContent', {visible: true});
-    const text = await extractElementText('.tooltipContent', page);
+/**
+ * @typedef {Object} TooltipCitation
+ * @property {string} text - Tooltip's citation text.
+ * @property {string} href - The href the citation link has.
+ * @property {number} citeNum - Tooltip's unique number.
+ */
+
+/**
+ * @typedef {Object} TooltipCitationData
+ * @property {string} text - Tooltip's citation text.
+ * @property {number} citeNum - Tooltip's unique number.
+ * @property {boolean} isBibleCitation - True if the tooltip citation showed a biblical scripture.
+ * @property {boolean} isPublicationCitation - True if the tooltip citation showed a publication.
+ * @property {TooltipCitation[]} recursiveBibleCitations - List of biblical citations found in the tooltip.
+ */
+
+/**
+ * @param {ElementHandle} $citationContainer
+ * @returns {Promise<TooltipCitation[]>}
+ */
+function buildTooltipCitations($citationContainer) {
+    return $citationContainer.$$eval(
+        'a.b',
+        els => Promise.all(
+            els.map(
+                citeLink => ({
+                    text: getTrimmedText(citeLink),
+                    href: citeLink.getAttribute('href'),
+                    citeNum: Math.floor(Math.random() * 10000),
+                })
+            )
+        )
+    );
+}
+
+/**
+ * @param {ElementHandle} $citationLink
+ * @param {Page} page
+ * @returns {Promise<TooltipCitationData>}
+ */
+async function hoverAndGetTooltipData($citationLink, page) {
+    const tooltipContentSelector = '.tooltipContent';
+    await $citationLink.hover();
+    await page.waitForSelector(tooltipContentSelector, {visible: true});
+
+    const text = await extractElementText(tooltipContentSelector, page);
+
+    const $citationContainer = await page.$(`${tooltipContentSelector} > *:first-child`);
+    const isBibleCitation = await $citationContainer.evaluate(e => e.classList.contains('bibleCitation'));
+    const isPublicationCitation = await $citationContainer.evaluate(e => e.classList.contains('publicationCitation'));
+    // I only care about biblical citations inside publication citations
+    /** @type {TooltipCitation[]} */const recursiveBibleCitations = isBibleCitation ? [] : await buildTooltipCitations($citationContainer);
+
     await page.click('.tooltipContainer .closeBtn');
-    await page.waitForSelector('.tooltipContent', {hidden: true});
-    return text;
-}
-
-function getNextFootnoteNum() {
-    return (getNextFootnoteNum.currentNumber += 1);
-}
-
-getNextFootnoteNum.currentNumber = 0;
-
-function cleanupTooltipText(rawTooltipText) {
-    const footnoteNum = getNextFootnoteNum();
-    const text = rawTooltipText
-        .replace(/^\d+?\W/, '')
-        .replaceAll(/[+*]/g, '');
+    await page.waitForSelector(tooltipContentSelector, {hidden: true});
 
     return {
-        text,
-        footnoteNum,
-    }
+        text: text.replace(/^\d+?\W/, '').replaceAll(/[+*]/g, ''),
+        citeNum: getNextCiteNum(),
+        isBibleCitation,
+        isPublicationCitation,
+        recursiveBibleCitations,
+    };
 }
+
+function getNextCiteNum() {
+    return (getNextCiteNum.currentNumber += 1);
+}
+
+getNextCiteNum.currentNumber = 0;
 
 /**
  * @param {Page} page
  * @param {ElementHandle} $paragraph
- * @param {ElementHandle[]} $biblicalCitations
+ * @param {ElementHandle[]} $citationLinks
+ * @returns {Promise<TooltipCitationData[]>}
  */
-async function addAndGetScriptureFootnotes(page, $paragraph, $biblicalCitations) {
-    let paragraphFootnotes = [];
-    for (const $biblicalCitation of $biblicalCitations) {
-        const rawText = await hoverAndGetTooltipText($biblicalCitation, page);
-        const footnoteData = cleanupTooltipText(rawText);
-        await $biblicalCitation.evaluate(
+export async function addAndGetScriptureFootnotes(page, $paragraph, $citationLinks) {
+    let textsCitations = [];
+    for (const $citationLink of $citationLinks) {
+        const citationData = await hoverAndGetTooltipData($citationLink, page);
+        await $citationLink.evaluate(
             (cite, fnNum) => cite.innerText += ` [^${fnNum}]`,
-            footnoteData.footnoteNum
+            citationData.citeNum
         );
-        paragraphFootnotes.push(footnoteData);
+        textsCitations.push(citationData);
     }
-    return paragraphFootnotes;
+    return textsCitations;
 }
 
 export async function waitForCookiesAndCloseIt(page) {
@@ -289,16 +333,9 @@ export async function waitForCookiesAndCloseIt(page) {
 }
 
 /**
- * Represents a paragraph's footnotes
- * @typedef {Object} ParagraphFootnote
- * @property {string} text - The footnote's contents.
- * @property {number} footnoteNum - The footnote number.
- */
-
-/**
  * Represents a paragraph within a section of the article.
  * @typedef {ParagraphContents} Paragraph
- * @property {ParagraphFootnote[]} footnotes - The paragraph footnotes.
+ * @property {TooltipCitationData[]} biblicalCitations - The text citations data.
  */
 
 /**
@@ -375,13 +412,13 @@ export async function extractBodyInSections(page) {
 
         for (let j = 0; j < $paragraphs.length; j++) {
             const $paragraph = $paragraphs[j];
-            log.debug('scraping $paragraph %d of %d', j + 1, $paragraphs.length);
+            log.debug('scraping paragraph %d of %d', j + 1, $paragraphs.length);
 
             const $biblicalCitations = await $paragraph.$$(`a.b`);
-            const footnotes = await addAndGetScriptureFootnotes(page, $paragraph, $biblicalCitations);
+            const biblicalCitations = await addAndGetScriptureFootnotes(page, $paragraph, $biblicalCitations);
             paragraphs.push({
                 ...await $paragraph.evaluate(mapParagraphToObj),
-                footnotes,
+                biblicalCitations,
             });
         }
         log.debug('paragraphs were extracted');
