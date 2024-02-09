@@ -236,68 +236,148 @@ export function extractTextFromElements(selector, context) {
     return context.$$eval(selector, (els) => els.map(getTrimmedText));
 }
 
+async function fetchBiblicalCitationHtml(href) {
+
+    const response = await fetch(
+        `https://wol.jw.org/${href.slice(3)}`,
+        {
+            "headers": {
+                "accept": "application/json, text/javascript, */*; q=0.01",
+                "accept-language": "en-US,en;q=0.9",
+                "cache-control": "no-cache",
+                "pragma": "no-cache",
+            },
+            "referrer": "https://wol.jw.org/es/wol/b/r4/lp-s/nwtsty/18/15",
+            "body": null,
+            "method": "GET",
+        }
+    );
+    let asJson = await response.json();
+    return asJson.items[0].content;
+}
+
+async function mapBiblicalCitationHtmlToCleanText(citationHtml, page) {
+    return page.evaluate((html) => {
+        // Create a temporary div element
+        let tempDiv = document.createElement('div');
+        // Set the innerHTML of the div to the provided HTML snippet
+        tempDiv.innerHTML = html;
+        [...tempDiv.querySelectorAll('a')].forEach(a => a.remove());
+        // Access the textContent property of the div
+        let textContent = tempDiv.textContent || tempDiv.innerText;
+        // Clean up the temporary div
+        tempDiv = null;
+        return textContent;
+    }, citationHtml);
+}
+
 /**
- * @typedef {Object} TooltipCitation
- * @property {string} text - Tooltip's citation text.
- * @property {string} href - The href the citation link has.
- * @property {number} citeNum - Tooltip's unique number.
+ * @param {string} linkHref
+ * @param {Page} page
+ * @returns {Promise<string>}
+ */
+async function fetchTooltipCitationText(linkHref, page) {
+    const biblicalCitationHtml = await fetchBiblicalCitationHtml(linkHref);
+    return mapBiblicalCitationHtmlToCleanText(biblicalCitationHtml, page);
+}
+
+/**
+ * @typedef {Object} CitationLinkData
+ * @property {string} linkText - Text that points to a citation (link's text).
+ * @property {string} linkHref - The href attribute of the citation link.
+ * @property {number} citeNum - Unique citation number.
  */
 
 /**
- * @typedef {Object} TooltipCitationData
- * @property {string} text - Tooltip's citation text.
- * @property {number} citeNum - Tooltip's unique number.
- * @property {boolean} isBibleCitation - True if the tooltip citation showed a biblical scripture.
- * @property {boolean} isPublicationCitation - True if the tooltip citation showed a publication.
- * @property {TooltipCitation[]} recursiveBibleCitations - List of biblical citations found in the tooltip.
+ * @typedef {Object} BiblicalCitation
+ * @property {string} citedText - The content's of the cited text.
+ * @property {number} citeNum - Citations unique identifier number.
+ * @property {CitationLinkData} linkData - Data about the link that generated this citation.
  */
 
 /**
  * @param {ElementHandle} $citationContainer
- * @returns {Promise<TooltipCitation[]>}
+ * @param {Page} page
+ * @returns {Promise<BiblicalCitation[]>}
  */
-function buildTooltipCitations($citationContainer) {
-    return $citationContainer.$$eval(
+async function buildTooltipBiblicalCitations($citationContainer, page) {
+    let citations = /** @type {BiblicalCitation[]} */ [];
+
+    const linksData = /** @type {CitationLinkData[]} */ await $citationContainer.$$eval(
         'a.b',
         els => Promise.all(
             els.map(
-                citeLink => ({
-                    text: getTrimmedText(citeLink),
-                    href: citeLink.getAttribute('href'),
+                citeLink => (/** @type {CitationLinkData} */ {
+                    linkText: getTrimmedText(citeLink),
+                    linkHref: citeLink.getAttribute('href'),
                     citeNum: Math.floor(Math.random() * 10000),
                 })
             )
         )
     );
+
+    for (const linkData of linksData) {
+        const citedText = await fetchTooltipCitationText(linkData.linkHref, page);
+        citations.push({
+            citedText,
+            citeNum: linkData.citeNum,
+            linkData,
+        });
+    }
+
+    return citations;
 }
+
+/**
+ * @typedef {Object} TooltipCitationData
+ * @property {number} citeNum - Citations unique identifier number.
+ * @property {CitationLinkData} linkData - Data about the link that generated this citation.
+ * @property {string} citedText - The content's of the cited text.
+ * @property {string} linkTextWithRef - Text of the link hat generated this citation with markdown footnote reference.
+ * @property {boolean} isBibleCitation - True if the tooltip citation showed a biblical scripture.
+ * @property {boolean} isPublicationCitation - True if the tooltip citation showed a publication.
+ * @property {BiblicalCitation[]} biblicalCitations - List of biblical citations found in the tooltip.
+ */
 
 /**
  * @param {ElementHandle} $citationLink
  * @param {Page} page
  * @returns {Promise<TooltipCitationData>}
  */
-async function hoverAndGetTooltipData($citationLink, page) {
+async function hoverAndGetTooltipCitationData($citationLink, page) {
     const tooltipContentSelector = '.tooltipContent';
+
+    const linkData = /** @type {CitationLinkData} */ {
+        linkText: await $citationLink.evaluate(getTrimmedText),
+        linkHref: await $citationLink.evaluate(l => l.getAttribute('href')),
+        citeNum: getNextCiteNum(),
+    };
+
     await $citationLink.hover();
     await page.waitForSelector(tooltipContentSelector, {visible: true});
-
-    const text = await extractElementText(tooltipContentSelector, page);
 
     const $citationContainer = await page.$(`${tooltipContentSelector} > *:first-child`);
     const isBibleCitation = await $citationContainer.evaluate(e => e.classList.contains('bibleCitation'));
     const isPublicationCitation = await $citationContainer.evaluate(e => e.classList.contains('publicationCitation'));
-    // I only care about biblical citations inside publication citations
-    /** @type {TooltipCitation[]} */const recursiveBibleCitations = isBibleCitation ? [] : await buildTooltipCitations($citationContainer);
+
+    let citedText = await extractElementText(tooltipContentSelector, page);
+    if (isBibleCitation) {
+        citedText = citedText.replace(/^\d+?\W/, '').replaceAll(/[+*]/g, '');
+    }
+    const biblicalCitations = /** @type {BiblicalCitation[]} */
+        isBibleCitation ? [] : await buildTooltipBiblicalCitations($citationContainer, page);
 
     await page.click('.tooltipContainer .closeBtn');
     await page.waitForSelector(tooltipContentSelector, {hidden: true});
 
-    return {
-        text: text.replace(/^\d+?\W/, '').replaceAll(/[+*]/g, ''),
-        citeNum: getNextCiteNum(),
+    return /** @type {TooltipCitationData} */ {
+        citeNum: linkData.citeNum,
+        linkData,
+        citedText,
+        linkTextWithRef: linkData.linkText + ` [^${linkData.citeNum}]`,
         isBibleCitation,
         isPublicationCitation,
-        recursiveBibleCitations,
+        biblicalCitations,
     };
 }
 
@@ -308,22 +388,45 @@ function getNextCiteNum() {
 getNextCiteNum.currentNumber = 0;
 
 /**
- * @param {Page} page
- * @param {ElementHandle} $paragraph
- * @param {ElementHandle[]} $citationLinks
- * @returns {Promise<TooltipCitationData[]>}
+ * @typedef {Object} CitationData
+ * @property {string} rawText - Text found as-is in the element that contains citation links.
+ * @property {string} textWithRefsOnly - Modified version of `rawText` to include markdown footnote references (without cite content).
+ * @property {string} textWithRefsAndFootNotes - Extended version of `textWithRefsOnly` that includes cite contents using markdown footnote references.
+ * @property {string} textWithRefsAndFootNotes2Levels - Extended version of `textWithRefsAndFootNotes` here we include the citations made by the citations.
+ * @property {TooltipCitationData[]} tooltipCitationsData - List of citation data extracted from in the tooltip(s).
  */
-export async function addAndGetScriptureFootnotes(page, $paragraph, $citationLinks) {
-    let textsCitations = [];
+
+/**
+ * @param {Page} page
+ * @param {ElementHandle} $elementWithCitations
+ * @param {ElementHandle[]} $citationLinks
+ * @returns {Promise<CitationData>}
+ */
+export async function buildCitationData(page, $elementWithCitations, $citationLinks) {
+    const rawText = await $elementWithCitations.evaluate(getTrimmedText);
+
+    let tooltipCitationsData = [];
     for (const $citationLink of $citationLinks) {
-        const citationData = await hoverAndGetTooltipData($citationLink, page);
-        await $citationLink.evaluate(
-            (cite, fnNum) => cite.innerText += ` [^${fnNum}]`,
-            citationData.citeNum
-        );
-        textsCitations.push(citationData);
+        tooltipCitationsData.push(await hoverAndGetTooltipCitationData($citationLink, page));
     }
-    return textsCitations;
+
+    const textWithRefsOnly = tooltipCitationsData.reduce((r, tcd) => r.replace(tcd.linkData.linkText, tcd.linkTextWithRef), rawText);
+    const textWithRefsAndFootNotes = tooltipCitationsData.reduce(
+        (r, tcd) => r + `[^${tcd.citeNum}]: ${tcd.citedText}\n`
+        , textWithRefsOnly + '\n---\n'
+    );
+    const textWithRefsAndFootNotes2Levels = tooltipCitationsData.reduce(
+        (r, tcd) => r + tcd.biblicalCitations.map(bc => `[^${bc.citeNum}]: ${bc.citedText}`).join('\n')
+        , textWithRefsAndFootNotes
+    );
+
+    return {
+        rawText,
+        textWithRefsOnly,
+        tooltipCitationsData,
+        textWithRefsAndFootNotes,
+        textWithRefsAndFootNotes2Levels,
+    };
 }
 
 export async function waitForCookiesAndCloseIt(page) {
@@ -400,22 +503,21 @@ export async function waitForCookiesAndCloseIt(page) {
 export async function extractBodyInSections(page) {
     log.debug('extracting body data');
     const $sections = await page.$$(`.bodyTxt .section`);
-    /** @type {ArticleSection[]} */
-    const sections = [];
+    const sections = /** @type {ArticleSection[]} */ [];
 
     for (let i = 0; i < $sections.length; i++) {
         const $section = $sections[i];
         log.debug('scraping section %d of %d', i + 1, $sections.length);
 
         const $paragraphs = await $section.$$(`.sb`);
-        /** @type {Paragraph[]} */ const paragraphs = [];
+        const paragraphs = /** @type {Paragraph[]} */ [];
 
         for (let j = 0; j < $paragraphs.length; j++) {
             const $paragraph = $paragraphs[j];
             log.debug('scraping paragraph %d of %d', j + 1, $paragraphs.length);
 
             const $biblicalCitations = await $paragraph.$$(`a.b`);
-            const biblicalCitations = await addAndGetScriptureFootnotes(page, $paragraph, $biblicalCitations);
+            const biblicalCitations = await buildCitationData(page, $paragraph, $biblicalCitations);
             paragraphs.push({
                 ...await $paragraph.evaluate(mapParagraphToObj),
                 biblicalCitations,
@@ -426,13 +528,13 @@ export async function extractBodyInSections(page) {
         const title = await $section.$eval(`h2`, getTrimmedText).catch(() => '');
         log.debug('title was extracted');
 
-        /** @type {Question[]} */ const questions = await $section.$$eval(`.qu`, els => els.map(mapQuestionElToObj));
+        const questions = /** @type {Question[]} */ await $section.$$eval(`.qu`, els => els.map(mapQuestionElToObj));
         log.debug('questions were extracted');
 
-        /** @type {Figure[]} */ const figures = await $section.$$eval(`.pGroup > div[id*="f"] figure`, els => els.map(mapFigureElToObj));
+        const figures = /** @type {Figure[]} */ await $section.$$eval(`.pGroup > div[id*="f"] figure`, els => els.map(mapFigureElToObj));
         log.debug('figures were extracted');
 
-        /** @type {Supplement[]} */ const supplements = await $section.$$eval(`.boxSupplement`, els => els.map(mapSupplementBoxElToObj));
+        const supplements = /** @type {Supplement[]} */ await $section.$$eval(`.boxSupplement`, els => els.map(mapSupplementBoxElToObj));
         log.debug('supplements were extracted');
 
         sections.push({
