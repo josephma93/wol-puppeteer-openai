@@ -38,4 +38,5 @@ export async function writeJSONToDisk(dirPath, fileName, jsonToWrite) {
     log.debug(`writing json to: ${filePath}`);
     await fs.writeFile(filePath, JSON.stringify(jsonToWrite, null, 2));
     log.info(`json data successfully written to: ${filePath}`);
+    return filePath;
 }
