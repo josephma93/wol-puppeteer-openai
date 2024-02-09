@@ -12,7 +12,7 @@ log4js.configure({
         }
     },
 });
-import {Command, InvalidArgumentError} from 'commander';
+import {Command} from 'commander';
 import puppeteer from "puppeteer";
 import {
     extractBodyInSections,
@@ -23,6 +23,7 @@ import {
 } from "./core/wol_pub_scraping_tools.mjs";
 import {createRunsDirIfRequired, createThisRunDir, writeJSONToDisk} from "./core/program_output.mjs";
 import sanitize from "sanitize-filename";
+import {commanderParseArticleUrl} from "./core/program_input.mjs";
 
 /**
  * Represents the structure of an article with religious content.
@@ -61,26 +62,12 @@ async function extractArticleContents(page) {
     };
 }
 
-function parseArticleUrl(potentialUrl, dummyPrevious) {
-    const VALID_DOMAIN = 'wol.jw.org';
-    try {
-        new URL(potentialUrl);
-    } catch (error) {
-        throw new InvalidArgumentError(`The given articleUrl is not a valid URL.`);
-    }
-    const url = new URL(potentialUrl);
-    if (url.hostname !== VALID_DOMAIN) {
-        throw new InvalidArgumentError(`The given articleUrl doesn't point to ${VALID_DOMAIN}.`);
-    }
-    return url;
-}
-
 const log = log4js.getLogger("main");
 const program = new Command();
 program
     .description('Scrape article data in JSON format')
     .option('-d, --debug', 'output extra debugging')
-    .option('-u, --article-url <articleUrl>', 'The URL to an article in WOL', parseArticleUrl)
+    .option('-u, --article-url <articleUrl>', 'The URL to an article in WOL', commanderParseArticleUrl)
     .parse();
 
 const programOptions = program.opts();

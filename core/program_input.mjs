@@ -1,7 +1,22 @@
 import {readFile} from "node:fs/promises";
 import log4js from 'log4js'
+import {InvalidArgumentError} from "commander";
 
 const log = log4js.getLogger("program_input");
+
+export function commanderParseArticleUrl(potentialUrl, dummyPrevious) {
+    const VALID_DOMAIN = 'wol.jw.org';
+    try {
+        new URL(potentialUrl);
+    } catch (error) {
+        throw new InvalidArgumentError(`The given articleUrl is not a valid URL.`);
+    }
+    const url = new URL(potentialUrl);
+    if (url.hostname !== VALID_DOMAIN) {
+        throw new InvalidArgumentError(`The given articleUrl doesn't point to ${VALID_DOMAIN}.`);
+    }
+    return url;
+}
 
 export async function readJsonFromFile(filePath) {
     try {
