@@ -256,10 +256,7 @@ ${allArticleContents}
  * @returns {Map<string, string>}
  */
 function buildParagraphsByNumberMap(paragraphs) {
-    return paragraphs.reduce((a, p) => {
-        a.set(p.parNum, p.text);
-        return a;
-    }, new Map());
+    return paragraphs.reduce((a, p) => a.set(p.parNum, p.citationData.textWithRefsAndFootNotes), new Map());
 }
 
 /**
@@ -546,7 +543,7 @@ async function generateParagraphAnswers(wAsJson) {
  * @param {StudyArticle} wAsJson
  */
 async function generateTeachBlockAnswers(wAsJson) {
-    const allArticleContents  = wAsJson.body.map(s => s.paragraphs.map(p => p.text).join('\n')).join('\n');
+    const allArticleContents  = wAsJson.body.map(s => s.paragraphs.map(p => p.citationData.rawText).join('\n')).join('\n');
     const prompt = promptBuilders.teachBlockQuestions(wAsJson.teachBlock.listItems, allArticleContents);
     const completion = await getGPTJSONResponse([
         generalJWRolePrompt,
@@ -585,7 +582,7 @@ Formato:
 🎯 Puntos que responden la pregunta.
 2️⃣ Comentario de una idea secundaria del párrafo.
 ✍️ Comentario del texto principal.
-✍️2️⃣ Comentario de una texto secundario.
+✍️2️⃣ Comentario de un texto secundario.
 
 ${aiResults.answers.map(item => {
     let result = `⟾⟾ ${item.pCovered} `;

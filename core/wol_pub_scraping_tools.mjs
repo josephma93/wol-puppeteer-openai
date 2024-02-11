@@ -264,7 +264,7 @@ async function mapBiblicalCitationHtmlToCleanText(citationHtml, page) {
         tempDiv.innerHTML = html;
         [...tempDiv.querySelectorAll('a')].forEach(a => a.remove());
         // Access the textContent property of the div
-        let textContent = tempDiv.textContent || tempDiv.innerText;
+        let textContent = getTrimmedText(tempDiv);
         // Clean up the temporary div
         tempDiv = null;
         return textContent;
@@ -411,21 +411,22 @@ export async function buildCitationData(page, $elementWithCitations, $citationLi
     }
 
     const textWithRefsOnly = tooltipCitationsData.reduce((r, tcd) => r.replace(tcd.linkData.linkText, tcd.linkTextWithRef), rawText);
-    const textWithRefsAndFootNotes = tooltipCitationsData.reduce(
-        (r, tcd) => r + `[^${tcd.citeNum}]: ${tcd.citedText}\n`
-        , textWithRefsOnly + '\n---\n'
-    );
+    const prepForFootnote = t => t.replaceAll(/\n\n/g, '\n').replaceAll(/\n/g, '\n  ').trim();
+    const textWithRefsAndFootNotes = (tooltipCitationsData.length ? textWithRefsOnly + '\n---\n' : textWithRefsOnly)
+        + tooltipCitationsData
+            .map(tcd => `[^${tcd.citeNum}]: ${prepForFootnote(tcd.citedText)}`)
+            .join('\n');
     const textWithRefsAndFootNotes2Levels = tooltipCitationsData.reduce(
-        (r, tcd) => r + tcd.biblicalCitations.map(bc => `[^${bc.citeNum}]: ${bc.citedText}`).join('\n')
-        , textWithRefsAndFootNotes
+        (r, tcd) => r + tcd.biblicalCitations.map(bc => `[^${bc.citeNum}]: ${prepForFootnote(bc.citedText)}`).join('\n')
+        , (tooltipCitationsData.length ? textWithRefsAndFootNotes + '\n' : textWithRefsAndFootNotes)
     );
 
     return {
         rawText,
         textWithRefsOnly,
-        tooltipCitationsData,
         textWithRefsAndFootNotes,
         textWithRefsAndFootNotes2Levels,
+        tooltipCitationsData,
     };
 }
 
@@ -438,7 +439,7 @@ export async function waitForCookiesAndCloseIt(page) {
 /**
  * Represents a paragraph within a section of the article.
  * @typedef {ParagraphContents} Paragraph
- * @property {TooltipCitationData[]} biblicalCitations - The text citations data.
+ * @property {CitationData} citationData - The text citations data.
  */
 
 /**
@@ -517,10 +518,10 @@ export async function extractBodyInSections(page) {
             log.debug('scraping paragraph %d of %d', j + 1, $paragraphs.length);
 
             const $biblicalCitations = await $paragraph.$$(`a.b`);
-            const biblicalCitations = await buildCitationData(page, $paragraph, $biblicalCitations);
+            const citationData = await buildCitationData(page, $paragraph, $biblicalCitations);
             paragraphs.push({
                 ...await $paragraph.evaluate(mapParagraphToObj),
-                biblicalCitations,
+                citationData,
             });
         }
         log.debug('paragraphs were extracted');

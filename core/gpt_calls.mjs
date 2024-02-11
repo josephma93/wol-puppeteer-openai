@@ -43,12 +43,15 @@ const log = log4js.getLogger("gpt_calls");
 
 export async function getGPTResponse(messages) {
     log.debug(`Calling GPT...`);
+    // TODO: figure out how store the prompts
+    // log.debug('%s', messages.map(m => `\trole: ${m.role}\n${m.content}`).join('\n---\n'));
     const result = await openai.chat.completions.create({
         messages: messages,
         model: "gpt-3.5-turbo-0125",
         max_tokens: 1000,
     })
-    log.debug(`GPT call done, usage: %j`, result.usage);
+    // log.debug(`GPT call done, usage: %j`, result.usage);
+    // return {};
     return result;
 }
 
