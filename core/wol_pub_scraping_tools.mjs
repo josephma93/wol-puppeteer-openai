@@ -293,6 +293,7 @@ async function fetchTooltipCitationText(linkHref, page) {
  * @property {string} citedText - The content's of the cited text.
  * @property {number} citeNum - Citations unique identifier number.
  * @property {CitationLinkData} linkData - Data about the link that generated this citation.
+ * @property {string} linkTextWithRef - Text of the link hat generated this citation with markdown footnote reference.
  */
 
 /**
@@ -322,6 +323,7 @@ async function buildTooltipBiblicalCitations($citationContainer, page) {
             citedText,
             citeNum: linkData.citeNum,
             linkData,
+            linkTextWithRef: linkData.linkText + ` [^${linkData.citeNum}]`,
         });
     }
 
@@ -417,7 +419,7 @@ export async function buildCitationData(page, $elementWithCitations, $citationLi
             .map(tcd => `[^${tcd.citeNum}]: ${prepForFootnote(tcd.citedText)}`)
             .join('\n');
     const textWithRefsAndFootNotes2Levels = tooltipCitationsData.reduce(
-        (r, tcd) => r + tcd.biblicalCitations.map(bc => `[^${bc.citeNum}]: ${prepForFootnote(bc.citedText)}`).join('\n')
+        (r, tcd) => tcd.biblicalCitations.reduce((a, bc) => a.replace(bc.linkData.linkText, bc.linkTextWithRef), r) + tcd.biblicalCitations.map(bc => `[^${bc.citeNum}]: ${prepForFootnote(bc.citedText)}`).join('\n')
         , (tooltipCitationsData.length ? textWithRefsAndFootNotes + '\n' : textWithRefsAndFootNotes)
     );
 
