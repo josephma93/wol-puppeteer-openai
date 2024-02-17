@@ -41,30 +41,48 @@ import log4js from 'log4js'
 const openai = new OpenAI();
 const log = log4js.getLogger("gpt_calls");
 
-export async function getGPTResponse(messages) {
+export async function callGPT(chatCompletionCreateParamsBase) {
     log.debug(`Calling GPT...`);
     // TODO: figure out how store the prompts
-    // log.debug('%s', messages.map(m => `\trole: ${m.role}\n${m.content}`).join('\n---\n'));
-    const result = await openai.chat.completions.create({
-        messages: messages,
-        model: "gpt-3.5-turbo-0125",
-        max_tokens: 1000,
-    })
-    // log.debug(`GPT call done, usage: %j`, result.usage);
-    // return {};
+    // log.debug('%s', messages.map(m => `role: ${m.role}\n${m.content}`).join('\n---\n'));
+    const result = await openai.chat.completions.create(chatCompletionCreateParamsBase)
+    log.debug(`GPT call done, usage: %j`, result.usage);
     return result;
 }
 
+export async function getGPTResponse(messages) {
+    return await callGPT({
+        messages: messages,
+        model: "gpt-3.5-turbo-0125",
+        max_tokens: 1000,
+    });
+}
+
 export async function getGPTJSONResponse(messages) {
-    log.debug(`Calling GPT...`);
-    const result = await openai.chat.completions.create({
+    return await callGPT({
         messages: messages,
         model: "gpt-3.5-turbo-0125",
         max_tokens: 2000,
         response_format: {type: "json_object"},
-    })
-    log.debug(`GPT call done, usage: %j`, result.usage);
-    return result;
+    });
+}
+export async function getGPT4Response(messages) {
+    return await callGPT({
+        messages: messages,
+        model: "gpt-4-0125-preview",
+        temperature: 1.5,
+        max_tokens: 1000,
+    });
+}
+
+export async function getGPT4JSONResponse(messages) {
+    return await callGPT({
+        messages: messages,
+        model: "gpt-4-0125-preview",
+        temperature: 1.5,
+        max_tokens: 2000,
+        response_format: {type: "json_object"},
+    });
 }
 
 export async function generateAIReasoning(prompt) {
