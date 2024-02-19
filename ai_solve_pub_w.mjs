@@ -673,6 +673,8 @@ ${wAsJson.teachBlock.listItems.map((q, i) => `${q}\n\t🎯💥 ${aiResults.teach
     );
 }
 
+// OPENAI_API_KEY=API_KEY_HERE node ai_solve_pub_w.mjs "runs/pub_w_scrape/2024-02-17T22-49-32.595Z/ARTÍCULO DE ESTUDIO 51 — Lo que usted espera se hará realidad.json"
+
 const wAsJson = await getJSONToProcess();
 
 const runsDir = await createRunsDirIfRequired('./runs/watchtower_ai_runs');

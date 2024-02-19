@@ -69,6 +69,8 @@ async function extractArticleContents(page) {
     };
 }
 
+// node pub_scrape_w.mjs --article-url <article-url> [-d, --debug]
+
 const {log, browser, page} = await startProgram();
 
 const articleContents = await extractArticleContents(page);
