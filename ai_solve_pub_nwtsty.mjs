@@ -231,16 +231,19 @@ _¿Qué podemos aprender?_
  * @property {string} refContents - The detailed content of the reference, potentially including commentary or explanation.
  */
 
+// OPENAI_API_KEY=KEY node ai_solve_pub_w.mjs "runs/pub_w_scrape/2024-02-17T22-49-32.595Z/ARTÍCULO DE ESTUDIO 51 — Lo que usted espera se hará realidad.json"
+
 const log = log4js.getLogger("main");
 log.info('program started');
-
-const runsDir = await createRunsDirIfRequired('./runs/biblical_book_ai_runs');
-const thisRunDir = await createThisRunDir(runsDir);
 
 /** @type {BiblicalEntries} */
 const jsonToProcess = await getJSONToProcess();
 
 const aiResults = await generateAIResults(jsonToProcess);
+
+const runsDir = await createRunsDirIfRequired('./runs/biblical_book_ai_runs');
+const thisRunDir = await createThisRunDir(runsDir);
+
 await writeJSONToDisk(thisRunDir, 'aiResults.json', aiResults);
 
 const markdownResult = buildMarkdownResult(aiResults);
