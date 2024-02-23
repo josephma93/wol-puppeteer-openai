@@ -94,6 +94,9 @@ async function generateAIResults(bookRefData) {
     let result = [];
     log.info('%d biblical references will be processed', bookRefData.entries.length);
 
+    const totalForPercentage = bookRefData.entries.reduce((a, c) => a + c.references.length, 0);
+    let counterForPercentage = 0;
+
     for (let i = 0; i < bookRefData.entries.length; i++) {
         const entry = bookRefData.entries[i];
         log.debug(`start reference processing for: '%s'`, entry.citation);
@@ -122,6 +125,8 @@ async function generateAIResults(bookRefData) {
                 // Dump what we have so far so that we don't have to start over.
                 log.log(JSON.stringify(result));
             }
+            counterForPercentage++;
+            log.info('progress is: %d %%', Math.floor(counterForPercentage / totalForPercentage * 100));
         }
         log.info('biblical reference %d of %d was processed', i+1, bookRefData.entries.length);
     }
