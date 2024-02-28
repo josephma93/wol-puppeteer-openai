@@ -236,7 +236,7 @@ _¿Qué podemos aprender?_
  * @property {string} refContents - The detailed content of the reference, potentially including commentary or explanation.
  */
 
-// OPENAI_API_KEY=KEY node ai_solve_pub_w.mjs "runs/pub_w_scrape/2024-02-17T22-49-32.595Z/ARTÍCULO DE ESTUDIO 51 — Lo que usted espera se hará realidad.json"
+// OPENAI_API_KEY=KEY node ai_solve_pub_w.mjs "input_data/salmos_11.json"
 
 const log = log4js.getLogger("main");
 log.info('program started');
